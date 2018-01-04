@@ -9,7 +9,9 @@ import (
 	"os"
 	"os/signal"
 	"strconv"
+	"sync"
 	"syscall"
+	"time"
 
 	"code.byted.org/gopkg/pkg/log"
 )
@@ -21,6 +23,8 @@ var (
 type worker struct {
 	handlers []http.Handler
 	servers  []server
+	opt      *option
+	sync.Mutex
 }
 
 type server struct {
@@ -29,51 +33,22 @@ type server struct {
 }
 
 func (w *worker) run() error {
-
-	// listening fds
+	// init servers with fds from master
 	err := w.initServers()
 	if err != nil {
 		return err
 	}
 
-	err = w.start()
+	// start http servers
+	err = w.startServers()
 	if err != nil {
 		return err
 	}
+
+	go w.watchMaster()
+
 	// waitSignal
 	w.waitSignal()
-	return nil
-}
-
-func (w *worker) waitSignal() {
-	ch := make(chan os.Signal)
-	signal.Notify(ch, syscall.SIGKILL)
-	<-ch
-	w.stop()
-}
-
-func (w *worker) stop() {
-	for _, server := range w.servers {
-		err := server.Shutdown(context.TODO())
-		if err != nil {
-			log.Error("shutdown server error: %v", err)
-		}
-	}
-}
-
-func (w *worker) start() error {
-	if len(w.servers) == 0 {
-		return ErrNoServers
-	}
-	for i := 1; i < len(w.servers); i++ {
-		s := w.servers[i]
-		go func() {
-			if err := s.Serve(s.listener); err != nil {
-				log.Error("http Serve error: %v", err)
-			}
-		}()
-	}
-
 	return nil
 }
 
@@ -98,4 +73,56 @@ func (w *worker) initServers() error {
 		w.servers = append(w.servers, server)
 	}
 	return nil
+}
+
+func (w *worker) startServers() error {
+	if len(w.servers) == 0 {
+		return ErrNoServers
+	}
+	for i := 0; i < len(w.servers); i++ {
+		s := w.servers[i]
+		go func() {
+			if err := s.Serve(s.listener); err != nil {
+				log.Errorf("http Serve error: %v", err)
+			}
+		}()
+	}
+
+	return nil
+}
+
+// watchMaster to monitor if master dead
+func (w *worker) watchMaster() error {
+	for {
+		// if parent id change to 1, it means parent is dead
+		if os.Getppid() == 1 {
+			log.Infof("master dead, stop worker")
+			w.stop()
+			break
+		}
+		time.Sleep(w.opt.watchInterval)
+	}
+	return nil
+}
+
+func (w *worker) waitSignal() {
+	ch := make(chan os.Signal)
+	signal.Notify(ch, syscall.SIGKILL)
+	<-ch
+	w.stop()
+}
+
+// TODO: shutdown in parallel
+func (w *worker) stop() {
+	w.Lock()
+	defer w.Unlock()
+	for _, server := range w.servers {
+		ctx, cancel := context.WithTimeout(context.TODO(), w.opt.stopTimeout)
+		defer cancel()
+		err := server.Shutdown(ctx)
+		if err != nil {
+			log.Errorf("shutdown server error: %v", err)
+		}
+	}
+	os.Exit(0)
 }

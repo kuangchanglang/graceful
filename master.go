@@ -14,17 +14,24 @@ import (
 )
 
 type master struct {
-	addrs      []string
-	opt        *option
-	extraFiles []*os.File
-	worker     *os.Process
-	mu         sync.Mutex
-	ch         chan error
-	workerNum  int32
+	addrs      []string    // addrs to be listen, master use them to get file fds
+	opt        *option     // option config
+	extraFiles []*os.File  // listeners fds communicated between master and worker
+	worker     *os.Process // worker
+	ch         chan error  // channel waiting for worker.Wait()
+
+	// if livingWorkerNum could be:
+	//  0: all workers exit,
+	//  1: worker running,
+	//  2: reloading, new worker is up and old worker about to exit
+	//
+	// if livingWorkerNum down to 0, we kill master as well
+	livingWorkerNum int32
+	sync.Mutex
 }
 
 func (m *master) run() error {
-	m.mu.Lock()
+	m.Lock()
 	// init fds
 	err := m.initFDs()
 	if err != nil {
@@ -37,7 +44,7 @@ func (m *master) run() error {
 		return err
 	}
 	m.worker = p
-	m.mu.Unlock()
+	m.Unlock()
 
 	// wait for worker to exit
 	go m.waitWorker()
@@ -51,8 +58,8 @@ func (m *master) waitWorker() {
 	for {
 		select {
 		case <-m.ch:
-			atomic.AddInt32(&m.workerNum, -1)
-			if m.workerNum <= 0 { // all workers exit
+			atomic.AddInt32(&m.livingWorkerNum, -1)
+			if m.livingWorkerNum <= 0 { // all workers exit
 				m.stop()
 			}
 		}
@@ -84,8 +91,8 @@ func (m *master) waitSignal() {
 }
 
 func (m *master) reload() {
-	m.mu.Lock()
-	defer m.mu.Unlock()
+	m.Lock()
+	defer m.Unlock()
 
 	// start new worker
 	p, err := m.forkWorker()
@@ -99,11 +106,12 @@ func (m *master) reload() {
 }
 
 func (m *master) stop() {
-	m.mu.Lock()
-	defer m.mu.Unlock()
+	m.Lock()
+	defer m.Unlock()
 	os.Exit(0)
 }
 
+// initFDs clone from https://github.com/jpillora/overseer
 func (m *master) initFDs() error {
 	m.extraFiles = make([]*os.File, 0, len(m.addrs))
 	for _, addr := range m.addrs {
@@ -144,7 +152,7 @@ func (m *master) forkWorker() (*os.Process, error) {
 	if err != nil {
 		return nil, err
 	}
-	atomic.AddInt32(&m.workerNum, 1)
+	atomic.AddInt32(&m.livingWorkerNum, 1)
 	go func() {
 		m.ch <- cmd.Wait()
 	}()
