@@ -7,22 +7,24 @@ import (
 	"time"
 )
 
+// constants
 const (
-	EnvWorker = "GRACEFUL_WORKER"
-	EnvNumFD  = "GRACEFUL_NUMFD"
-	ValWorker = "1"
+	EnvWorker       = "GRACEFUL_WORKER"
+	EnvNumFD        = "GRACEFUL_NUMFD"
+	EnvOldWorkerPid = "GRACEFUL_OLD_WORKER_PID"
+	ValWorker       = "1"
 )
 
 var (
 	defaultWatchInterval = time.Second
 	defaultStopTimeout   = 20 * time.Second
-	defaultReloadSignals = []os.Signal{syscall.SIGHUP, syscall.SIGUSR1}
-	defaultStopSignals   = []os.Signal{syscall.SIGKILL, syscall.SIGTERM, syscall.SIGINT}
+	defaultReloadSignals = []syscall.Signal{syscall.SIGHUP, syscall.SIGUSR1}
+	defaultStopSignals   = []syscall.Signal{syscall.SIGKILL, syscall.SIGTERM, syscall.SIGINT}
 )
 
 type option struct {
-	reloadSignals []os.Signal
-	stopSignals   []os.Signal
+	reloadSignals []syscall.Signal
+	stopSignals   []syscall.Signal
 	watchInterval time.Duration
 	stopTimeout   time.Duration
 }
@@ -30,14 +32,14 @@ type option struct {
 type Option func(o *option)
 
 // WithReloadSignals set reload signals, otherwise, default ones are used
-func WithReloadSignals(sigs []os.Signal) Option {
+func WithReloadSignals(sigs []syscall.Signal) Option {
 	return func(o *option) {
 		o.reloadSignals = sigs
 	}
 }
 
 // WithStopSignals set stop signals, otherwise, default ones are used
-func WithStopSignals(sigs []os.Signal) Option {
+func WithStopSignals(sigs []syscall.Signal) Option {
 	return func(o *option) {
 		o.stopSignals = sigs
 	}
@@ -93,12 +95,24 @@ func (s *Server) Run() error {
 	if len(s.addrs) == 0 {
 		return ErrNoServers
 	}
-	if os.Getenv(EnvWorker) == ValWorker {
+	if isWorker() {
 		worker := &worker{handlers: s.handlers, opt: s.opt}
 		return worker.run()
 	}
-	master := &master{addrs: s.addrs, opt: s.opt, ch: make(chan error)}
+	master := &master{addrs: s.addrs, opt: s.opt, workerExit: make(chan error)}
 	return master.run()
+}
+
+// Reload reload server gracefully
+func (s *Server) Reload() error {
+	ppid := os.Getppid()
+	if isWorker() && ppid != 1 && len(s.opt.reloadSignals) > 0 {
+		return syscall.Kill(ppid, s.opt.reloadSignals[0])
+	}
+
+	// Reload called by user from outside usally in user's handler
+	// which works on worker, master don't need to handle this
+	return nil
 }
 
 // ListenAndServe starts server with (addr, handler)
@@ -106,4 +120,8 @@ func ListenAndServe(addr string, handler http.Handler) error {
 	server := NewServer()
 	server.Register(addr, handler)
 	return server.Run()
+}
+
+func isWorker() bool {
+	return os.Getenv(EnvWorker) == ValWorker
 }

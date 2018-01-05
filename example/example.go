@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"html"
 	"net/http"
-	"os"
 	"syscall"
 	"time"
 
@@ -31,10 +30,22 @@ func listenMultiAddrs() {
 	fmt.Printf("error: %v\n", err)
 }
 
+func callReload() {
+	server := graceful.NewServer()
+	server.Register("0.0.0.0:9226", &handler{})
+	go func() {
+		time.Sleep(time.Second)
+		server.Reload()
+	}()
+
+	err := server.Run()
+	fmt.Printf("error: %v\n", err)
+}
+
 func setReloadSignal() {
 	server := graceful.NewServer(
-		graceful.WithReloadSignals([]os.Signal{syscall.SIGUSR2}),
-		graceful.WithStopSignals([]os.Signal{syscall.SIGINT}),
+		graceful.WithReloadSignals([]syscall.Signal{syscall.SIGUSR2}),
+		graceful.WithStopSignals([]syscall.Signal{syscall.SIGINT}),
 		graceful.WithStopTimeout(time.Minute),
 		graceful.WithWatchInterval(10*time.Second),
 	)

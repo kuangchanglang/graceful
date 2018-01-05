@@ -15,6 +15,10 @@ import (
 	"time"
 )
 
+const (
+	workerStopSignal = syscall.SIGKILL
+)
+
 var (
 	ErrNoServers = errors.New("no servers")
 )
@@ -42,6 +46,16 @@ func (w *worker) run() error {
 	err = w.startServers()
 	if err != nil {
 		return err
+	}
+
+	oldWorkerPid, err := strconv.Atoi(os.Getenv(EnvOldWorkerPid))
+	if err == nil && oldWorkerPid > 1 {
+		// tell old worker i'm ready, you should go away
+		err = syscall.Kill(oldWorkerPid, workerStopSignal)
+		if err != nil {
+			// unexpected: kill old worker fail
+			log.Printf("[warning] kill old worker error: %v\n", err)
+		}
 	}
 
 	go w.watchMaster()
@@ -106,7 +120,7 @@ func (w *worker) watchMaster() error {
 
 func (w *worker) waitSignal() {
 	ch := make(chan os.Signal)
-	signal.Notify(ch, syscall.SIGKILL)
+	signal.Notify(ch, workerStopSignal)
 	<-ch
 	w.stop()
 }

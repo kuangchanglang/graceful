@@ -37,6 +37,10 @@ multi servers:
 
 More example checkout example folder.
 
+# Reload
+```SIGHUP``` and ```SIGUSR2``` on master proccess are used as default to reload server. ```server.Reload()``` func works as well from your code.
+
+
 # Drawback
 ```graceful``` starts a master process to keep pid unchaged for process managers(systemd, supervisor, etc.), and a worker proccess listen to actual addrs. That means ```graceful``` starts one more process. Fortunately, master proccess waits for signals and reload worker when neccessary, which is costless since reload is usually low-frequency action. 
 

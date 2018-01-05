@@ -9,15 +9,14 @@ import (
 	"os/signal"
 	"sync"
 	"sync/atomic"
-	"syscall"
 )
 
 type master struct {
-	addrs      []string    // addrs to be listen, master use them to get file fds
-	opt        *option     // option config
-	extraFiles []*os.File  // listeners fds communicated between master and worker
-	worker     *os.Process // worker
-	ch         chan error  // channel waiting for worker.Wait()
+	addrs      []string   // addrs to be listen, master use them to get file fds
+	opt        *option    // option config
+	extraFiles []*os.File // listeners fds communicated between master and worker
+	workerPid  int        // worker proccess
+	workerExit chan error // channel waiting for worker.Wait()
 
 	// if livingWorkerNum could be:
 	//  0: all workers exit,
@@ -38,11 +37,11 @@ func (m *master) run() error {
 	}
 
 	// fork worker
-	p, err := m.forkWorker()
+	pid, err := m.forkWorker()
 	if err != nil {
 		return err
 	}
-	m.worker = p
+	m.workerPid = pid
 	m.Unlock()
 
 	// wait for worker to exit
@@ -56,7 +55,7 @@ func (m *master) run() error {
 func (m *master) waitWorker() {
 	for {
 		select {
-		case <-m.ch:
+		case <-m.workerExit:
 			atomic.AddInt32(&m.livingWorkerNum, -1)
 			if m.livingWorkerNum <= 0 { // all workers exit
 				m.stop()
@@ -68,8 +67,12 @@ func (m *master) waitWorker() {
 func (m *master) waitSignal() {
 	ch := make(chan os.Signal)
 	sigs := make([]os.Signal, 0, len(m.opt.reloadSignals)+len(m.opt.stopSignals))
-	sigs = append(sigs, m.opt.reloadSignals...)
-	sigs = append(sigs, m.opt.stopSignals...)
+	for _, s := range m.opt.reloadSignals {
+		sigs = append(sigs, s)
+	}
+	for _, s := range m.opt.stopSignals {
+		sigs = append(sigs, s)
+	}
 	signal.Notify(ch, sigs...)
 	for {
 		sig := <-ch
@@ -96,12 +99,11 @@ func (m *master) reload() {
 	// start new worker
 	p, err := m.forkWorker()
 	if err != nil {
+		log.Printf("[reload] fork worker error: %v\n", err)
 		return
 	}
-	// stop old worker
-	m.worker.Signal(syscall.SIGKILL)
-	m.worker.Wait() // avoid child proccess being zombie
-	m.worker = p
+
+	m.workerPid = p
 }
 
 func (m *master) stop() {
@@ -116,7 +118,7 @@ func (m *master) initFDs() error {
 	for _, addr := range m.addrs {
 		a, err := net.ResolveTCPAddr("tcp", addr)
 		if err != nil {
-			return fmt.Errorf("Invalid address %s (%s)", addr, err)
+			return fmt.Errorf("invalid address %s (%s)", addr, err)
 		}
 		l, err := net.ListenTCP("tcp", a)
 		if err != nil {
@@ -124,24 +126,25 @@ func (m *master) initFDs() error {
 		}
 		f, err := l.File()
 		if err != nil {
-			return fmt.Errorf("Failed to retreive fd for: %s (%s)", addr, err)
+			return fmt.Errorf("failed to retreive fd for: %s (%s)", addr, err)
 		}
 		if err := l.Close(); err != nil {
-			return fmt.Errorf("Failed to close listener for: %s (%s)", addr, err)
+			return fmt.Errorf("failed to close listener for: %s (%s)", addr, err)
 		}
 		m.extraFiles = append(m.extraFiles, f)
 	}
 	return nil
 }
 
-func (m *master) forkWorker() (*os.Process, error) {
+func (m *master) forkWorker() (int, error) {
 	path := os.Args[0]
 	var args []string
 	if len(os.Args) > 1 {
 		args = os.Args[1:]
 	}
 
-	env := append(os.Environ(), fmt.Sprintf("%s=%s", EnvWorker, ValWorker), fmt.Sprintf("%s=%d", EnvNumFD, len(m.extraFiles)))
+	env := append(os.Environ(), fmt.Sprintf("%s=%s", EnvWorker, ValWorker), fmt.Sprintf("%s=%d", EnvNumFD, len(m.extraFiles)), fmt.Sprintf("%s=%d", EnvOldWorkerPid, m.workerPid))
+
 	cmd := exec.Command(path, args...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
@@ -149,11 +152,11 @@ func (m *master) forkWorker() (*os.Process, error) {
 	cmd.Env = env
 	err := cmd.Start()
 	if err != nil {
-		return nil, err
+		return 0, err
 	}
 	atomic.AddInt32(&m.livingWorkerNum, 1)
 	go func() {
-		m.ch <- cmd.Wait()
+		m.workerExit <- cmd.Wait()
 	}()
-	return cmd.Process, nil
+	return cmd.Process.Pid, nil
 }
