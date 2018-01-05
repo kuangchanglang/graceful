@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"net"
 	"net/http"
 	"os"
@@ -12,8 +13,6 @@ import (
 	"sync"
 	"syscall"
 	"time"
-
-	"code.byted.org/gopkg/pkg/log"
 )
 
 var (
@@ -83,7 +82,7 @@ func (w *worker) startServers() error {
 		s := w.servers[i]
 		go func() {
 			if err := s.Serve(s.listener); err != nil {
-				log.Errorf("http Serve error: %v", err)
+				log.Printf("http Serve error: %v\n", err)
 			}
 		}()
 	}
@@ -96,7 +95,7 @@ func (w *worker) watchMaster() error {
 	for {
 		// if parent id change to 1, it means parent is dead
 		if os.Getppid() == 1 {
-			log.Infof("master dead, stop worker")
+			log.Printf("master dead, stop worker\n")
 			w.stop()
 			break
 		}
@@ -121,7 +120,7 @@ func (w *worker) stop() {
 		defer cancel()
 		err := server.Shutdown(ctx)
 		if err != nil {
-			log.Errorf("shutdown server error: %v", err)
+			log.Printf("shutdown server error: %v\n", err)
 		}
 	}
 	os.Exit(0)

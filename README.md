@@ -1,5 +1,5 @@
 # graceful
-Inspired by [overseer](https://github.com/fvbock/endless) and [endless](https://github.com/fvbock/endless), with minimum codes and handy api to make http server graceful.
+Inspired by [overseer](https://github.com/jpillora/overseer) and [endless](https://github.com/fvbock/endless), with minimum codes and handy api to make http server graceful.
 
 # Prerequisite
 golang 1.8+
@@ -42,4 +42,4 @@ More example checkout example folder.
 
 # TODO
 - ListenAndServeTLS
-- Run in only one process without master-worker
+- Add alternative api: Run in single process without master-worker

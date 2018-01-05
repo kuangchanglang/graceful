@@ -2,6 +2,7 @@ package graceful
 
 import (
 	"fmt"
+	"log"
 	"net"
 	"os"
 	"os/exec"
@@ -9,8 +10,6 @@ import (
 	"sync"
 	"sync/atomic"
 	"syscall"
-
-	"code.byted.org/gopkg/pkg/log"
 )
 
 type master struct {
@@ -74,7 +73,7 @@ func (m *master) waitSignal() {
 	signal.Notify(ch, sigs...)
 	for {
 		sig := <-ch
-		log.Infof("got signal: %v", sig)
+		log.Printf("got signal: %v\n", sig)
 		for _, s := range m.opt.reloadSignals {
 			if s == sig {
 				m.reload()
