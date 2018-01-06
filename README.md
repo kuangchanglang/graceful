@@ -38,7 +38,7 @@ multi servers:
 More example checkout example folder.
 
 # Reload
-```SIGHUP``` and ```SIGUSR2``` on master proccess are used as default to reload server. ```server.Reload()``` func works as well from your code.
+```SIGHUP``` and ```SIGUSR1``` on master proccess are used as default to reload server. ```server.Reload()``` func works as well from your code.
 
 
 # Drawback
