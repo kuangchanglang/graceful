@@ -16,7 +16,7 @@ import (
 )
 
 const (
-	workerStopSignal = syscall.SIGKILL
+	workerStopSignal = syscall.SIGTERM
 )
 
 var (
@@ -31,7 +31,7 @@ type worker struct {
 }
 
 type server struct {
-	http.Server
+	*http.Server
 	listener net.Listener
 }
 
@@ -78,7 +78,7 @@ func (w *worker) initServers() error {
 			return fmt.Errorf("failed to inherit file descriptor: %d", i)
 		}
 		server := server{
-			Server: http.Server{
+			Server: &http.Server{
 				Handler: w.handlers[i],
 			},
 			listener: l,
@@ -115,13 +115,15 @@ func (w *worker) watchMaster() error {
 		}
 		time.Sleep(w.opt.watchInterval)
 	}
+	os.Exit(0)
 	return nil
 }
 
 func (w *worker) waitSignal() {
 	ch := make(chan os.Signal)
 	signal.Notify(ch, workerStopSignal)
-	<-ch
+	sig := <-ch
+	log.Printf("worker got signal: %v\n", sig)
 	w.stop()
 }
 
@@ -137,5 +139,4 @@ func (w *worker) stop() {
 			log.Printf("shutdown server error: %v\n", err)
 		}
 	}
-	os.Exit(0)
 }

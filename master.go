@@ -76,7 +76,7 @@ func (m *master) waitSignal() {
 	signal.Notify(ch, sigs...)
 	for {
 		sig := <-ch
-		log.Printf("got signal: %v\n", sig)
+		log.Printf("master got signal: %v\n", sig)
 		for _, s := range m.opt.reloadSignals {
 			if s == sig {
 				m.reload()
