@@ -95,7 +95,7 @@ func (s *Server) Run() error {
 	if len(s.addrs) == 0 {
 		return ErrNoServers
 	}
-	if isWorker() {
+	if IsWorker() {
 		worker := &worker{handlers: s.handlers, opt: s.opt}
 		return worker.run()
 	}
@@ -106,7 +106,7 @@ func (s *Server) Run() error {
 // Reload reload server gracefully
 func (s *Server) Reload() error {
 	ppid := os.Getppid()
-	if isWorker() && ppid != 1 && len(s.opt.reloadSignals) > 0 {
+	if IsWorker() && ppid != 1 && len(s.opt.reloadSignals) > 0 {
 		return syscall.Kill(ppid, s.opt.reloadSignals[0])
 	}
 
@@ -122,6 +122,10 @@ func ListenAndServe(addr string, handler http.Handler) error {
 	return server.Run()
 }
 
-func isWorker() bool {
+func IsWorker() bool {
 	return os.Getenv(EnvWorker) == ValWorker
+}
+
+func IsMaster() bool {
+	return !IsWorker()
 }
