@@ -71,6 +71,10 @@ func (w *worker) initServers() error {
 		return fmt.Errorf("invalid %s integer", EnvNumFD)
 	}
 
+	if len(w.handlers) != numFDs {
+		return fmt.Errorf("handler number does not match numFDs, %v!=%v", len(w.handlers), numFDs)
+	}
+
 	for i := 0; i < numFDs; i++ {
 		f := os.NewFile(uintptr(3+i), "") // fd start from 3
 		l, err := net.FileListener(f)
