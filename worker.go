@@ -27,6 +27,7 @@ type worker struct {
 	handlers []http.Handler
 	servers  []server
 	opt      *option
+	stopCh   chan struct{}
 	sync.Mutex
 }
 
@@ -119,15 +120,20 @@ func (w *worker) watchMaster() error {
 		}
 		time.Sleep(w.opt.watchInterval)
 	}
-	os.Exit(0)
+	w.stopCh <- struct{}{}
 	return nil
 }
 
 func (w *worker) waitSignal() {
 	ch := make(chan os.Signal)
 	signal.Notify(ch, workerStopSignal)
-	sig := <-ch
-	log.Printf("worker got signal: %v\n", sig)
+	select {
+	case sig := <-ch:
+		log.Printf("worker got signal: %v\n", sig)
+	case <-w.stopCh:
+		log.Printf("stop worker")
+	}
+
 	w.stop()
 }
 

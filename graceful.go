@@ -96,7 +96,7 @@ func (s *Server) Run() error {
 		return ErrNoServers
 	}
 	if IsWorker() {
-		worker := &worker{handlers: s.handlers, opt: s.opt}
+		worker := &worker{handlers: s.handlers, opt: s.opt, stopCh: make(chan struct{})}
 		return worker.run()
 	}
 	master := &master{addrs: s.addrs, opt: s.opt, workerExit: make(chan error)}

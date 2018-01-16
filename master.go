@@ -44,9 +44,6 @@ func (m *master) run() error {
 	m.workerPid = pid
 	m.Unlock()
 
-	// wait for worker to exit
-	go m.waitWorker()
-
 	// wait signal
 	m.waitSignal()
 	return nil
@@ -75,8 +72,20 @@ func (m *master) waitSignal() {
 	}
 	signal.Notify(ch, sigs...)
 	for {
-		sig := <-ch
-		log.Printf("master got signal: %v\n", sig)
+		var sig os.Signal
+		select {
+		case <-m.workerExit:
+			atomic.AddInt32(&m.livingWorkerNum, -1)
+			if m.livingWorkerNum <= 0 {
+				log.Printf("all workers exit, master shutdown")
+				m.stop()
+				return
+			}
+			continue
+		case sig = <-ch:
+			log.Printf("master got signal: %v\n", sig)
+		}
+
 		for _, s := range m.opt.reloadSignals {
 			if s == sig {
 				m.reload()
@@ -86,7 +95,7 @@ func (m *master) waitSignal() {
 		for _, s := range m.opt.stopSignals {
 			if s == sig {
 				m.stop()
-				break
+				return
 			}
 		}
 	}
@@ -107,9 +116,7 @@ func (m *master) reload() {
 }
 
 func (m *master) stop() {
-	m.Lock()
-	defer m.Unlock()
-	os.Exit(0)
+	// todo
 }
 
 // initFDs clone from https://github.com/jpillora/overseer
