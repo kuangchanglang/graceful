@@ -20,6 +20,8 @@ var (
 	defaultStopTimeout   = 20 * time.Second
 	defaultReloadSignals = []syscall.Signal{syscall.SIGHUP, syscall.SIGUSR1}
 	defaultStopSignals   = []syscall.Signal{syscall.SIGKILL, syscall.SIGTERM, syscall.SIGINT}
+
+	StartedAt time.Time
 )
 
 type option struct {
@@ -95,6 +97,7 @@ func (s *Server) Run() error {
 	if len(s.addrs) == 0 {
 		return ErrNoServers
 	}
+	StartedAt = time.Now()
 	if IsWorker() {
 		worker := &worker{handlers: s.handlers, opt: s.opt, stopCh: make(chan struct{})}
 		return worker.run()
