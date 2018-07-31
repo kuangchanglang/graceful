@@ -41,8 +41,26 @@ More example checkout example folder.
 ```SIGHUP``` and ```SIGUSR1``` on master proccess are used as default to reload server. ```server.Reload()``` func works as well from your code.
 
 
-# Drawback
+# Drawbacks
 ```graceful``` starts a master process to keep pid unchaged for process managers(systemd, supervisor, etc.), and a worker proccess listen to actual addrs. That means ```graceful``` starts one more process. Fortunately, master proccess waits for signals and reload worker when neccessary, which is costless since reload is usually low-frequency action. 
+
+# Default values
+* ```StopTimeout```. Unfinished old connections will be drop in ```{StopTimeout}``` seconds, default 20s, after new server is up.
+```go
+	server := graceful.NewServer(graceful.WithStopTimeout(time.Duration(4 * time.Hour)))
+	server.Register(addr, handler)
+	if err := server.Run(); err != nil {
+		log.Fatal(err)
+	}
+```
+* ```Signals```. Default reload signals: ```syscall.SIGHUP, syscall.SIGUSR1``` and stop signals: ```syscall.SIGKILL, syscall.SIGTERM, syscall.SIGINT``` could be overwrited with:
+```go
+	server := graceful.NewServer(graceful.WithStopSignals([]syscall.Signal{syscall.SIGKILL}), graceful.WithReloadSignals([]syscall.Signal{syscall.SIGHUP}))
+	server.Register(addr, handler)
+	if err := server.Run(); err != nil {
+		log.Fatal(err)
+	}
+```
 
 # TODO
 - ListenAndServeTLS
