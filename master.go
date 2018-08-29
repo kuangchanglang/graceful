@@ -33,12 +33,14 @@ func (m *master) run() error {
 	// init fds
 	err := m.initFDs()
 	if err != nil {
+		m.Unlock()
 		return err
 	}
 
 	// fork worker
 	pid, err := m.forkWorker()
 	if err != nil {
+		m.Unlock()
 		return err
 	}
 	m.workerPid = pid
