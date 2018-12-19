@@ -51,18 +51,6 @@ func (m *master) run() error {
 	return nil
 }
 
-func (m *master) waitWorker() {
-	for {
-		select {
-		case <-m.workerExit:
-			atomic.AddInt32(&m.livingWorkerNum, -1)
-			if m.livingWorkerNum <= 0 { // all workers exit
-				m.stop()
-			}
-		}
-	}
-}
-
 func (m *master) waitSignal() {
 	ch := make(chan os.Signal)
 	sigs := make([]os.Signal, 0, len(m.opt.reloadSignals)+len(m.opt.stopSignals))
@@ -76,10 +64,15 @@ func (m *master) waitSignal() {
 	for {
 		var sig os.Signal
 		select {
-		case <-m.workerExit:
+		case err := <-m.workerExit:
+			if _, ok := err.(*exec.ExitError); ok {
+				log.Printf("worker exit with error: %+v, master is going to shutdown.", err)
+				m.stop()
+				return
+			}
 			atomic.AddInt32(&m.livingWorkerNum, -1)
 			if m.livingWorkerNum <= 0 {
-				log.Printf("all workers exit, master shutdown")
+				log.Printf("all workers exit, master is going to shutdown.")
 				m.stop()
 				return
 			}
