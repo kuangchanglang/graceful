@@ -62,9 +62,15 @@ func WithWatchInterval(timeout time.Duration) Option {
 	}
 }
 
+// address defines addr as well as its network type
+type address struct {
+	addr    string // ip:port, unix path
+	network string // tcp, unix
+}
+
 type Server struct {
 	opt      *option
-	addrs    []string
+	addrs    []address
 	handlers []http.Handler
 }
 
@@ -79,7 +85,7 @@ func NewServer(opts ...Option) *Server {
 		opt(option)
 	}
 	return &Server{
-		addrs:    make([]string, 0),
+		addrs:    make([]address, 0),
 		handlers: make([]http.Handler, 0),
 		opt:      option,
 	}
@@ -88,7 +94,13 @@ func NewServer(opts ...Option) *Server {
 // Register an addr and its corresponding handler
 // all (addr, handler) pair will be started with server.Run
 func (s *Server) Register(addr string, handler http.Handler) {
-	s.addrs = append(s.addrs, addr)
+	s.addrs = append(s.addrs, address{addr, "tcp"})
+	s.handlers = append(s.handlers, handler)
+}
+
+// RegisterUnix register (addr, handler) on unix socket
+func (s *Server) RegisterUnix(addr string, handler http.Handler) {
+	s.addrs = append(s.addrs, address{addr, "unix"})
 	s.handlers = append(s.handlers, handler)
 }
 

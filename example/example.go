@@ -27,6 +27,7 @@ func listenMultiAddrs() {
 	server.Register("0.0.0.0:9223", &handler{})
 	server.Register("0.0.0.0:9224", &handler{})
 	server.Register("0.0.0.0:9225", &handler{})
+	server.RegisterUnix("/tmp/test_graceful.sock", &handler{})
 	err := server.Run()
 	fmt.Printf("error: %v\n", err)
 }

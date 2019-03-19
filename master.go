@@ -9,10 +9,11 @@ import (
 	"os/signal"
 	"sync"
 	"sync/atomic"
+	"syscall"
 )
 
 type master struct {
-	addrs      []string   // addrs to be listen, master use them to get file fds
+	addrs      []address  // addrs to be listen, master use them to get file fds
 	opt        *option    // option config
 	extraFiles []*os.File // listeners fds communicated between master and worker
 	workerPid  int        // worker proccess
@@ -121,28 +122,59 @@ func (m *master) stop() {
 	// todo
 }
 
-// initFDs clone from https://github.com/jpillora/overseer
+// initFDs inits all registered addrs
 func (m *master) initFDs() error {
 	m.extraFiles = make([]*os.File, 0, len(m.addrs))
 	for _, addr := range m.addrs {
-		a, err := net.ResolveTCPAddr("tcp", addr)
+		f, err := m.listen(addr)
 		if err != nil {
-			return fmt.Errorf("invalid address %s (%s)", addr, err)
+			return fmt.Errorf("failed to listen on addr: %s, err: %v", addr, err)
 		}
-		l, err := net.ListenTCP("tcp", a)
-		if err != nil {
-			return err
-		}
-		f, err := l.File()
-		if err != nil {
-			return fmt.Errorf("failed to retreive fd for: %s (%s)", addr, err)
-		}
-		if err := l.Close(); err != nil {
-			return fmt.Errorf("failed to close listener for: %s (%s)", addr, err)
-		}
+
 		m.extraFiles = append(m.extraFiles, f)
 	}
 	return nil
+}
+
+// listen return listening file for given addr, tcp and unix socket supported
+func (m *master) listen(addr address) (*os.File, error) {
+	if addr.network == "tcp" {
+		a, err := net.ResolveTCPAddr("tcp", addr.addr)
+		if err != nil {
+			return nil, err
+		}
+		l, err := net.ListenTCP("tcp", a)
+		if err != nil {
+			return nil, err
+		}
+		f, err := l.File()
+		if err != nil {
+			return nil, err
+		}
+		if err := l.Close(); err != nil {
+			return nil, err
+		}
+		return f, nil
+	}
+
+	if addr.network == "unix" {
+		a, err := net.ResolveUnixAddr("unix", addr.addr)
+		if err != nil {
+			return nil, err
+		}
+		syscall.Unlink(addr.addr)
+		l, err := net.ListenUnix("unix", a)
+		if err != nil {
+			return nil, err
+		}
+		f, err := l.File()
+		if err != nil {
+			return nil, err
+		}
+		return f, nil
+	}
+
+	return nil, fmt.Errorf("unknown network: %v", addr.network)
 }
 
 func (m *master) forkWorker() (int, error) {
