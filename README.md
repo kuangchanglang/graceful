@@ -2,7 +2,8 @@
 Inspired by [overseer](https://github.com/jpillora/overseer) and [endless](https://github.com/fvbock/endless), with minimum codes and handy api to make http server graceful.
 
 # Prerequisite
-golang 1.8+
+- golang 1.8+
+- linux/darwin(windows not supported)
 
 # Feature
 - Graceful reload http servers, zero downtime on upgrade.
