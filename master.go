@@ -179,7 +179,7 @@ func (m *master) forkWorker() (int, error) {
 		args = os.Args[1:]
 	}
 
-	env := append(os.Environ(), fmt.Sprintf("%s=%s", EnvWorker, ValWorker), fmt.Sprintf("%s=%d", EnvNumFD, len(m.extraFiles)), fmt.Sprintf("%s=%d", EnvOldWorkerPid, m.workerPid))
+	env := append(os.Environ(), fmt.Sprintf("%s=%s", EnvWorker, ValWorker), fmt.Sprintf("%s=%d", EnvNumFD, len(m.extraFiles)), fmt.Sprintf("%s=%d", EnvParentPid, os.Getpid()), fmt.Sprintf("%s=%d", EnvOldWorkerPid, m.workerPid))
 
 	cmd := exec.Command(path, args...)
 	cmd.Stdout = os.Stdout

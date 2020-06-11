@@ -113,9 +113,10 @@ func (w *worker) startServers() error {
 
 // watchMaster to monitor if master dead
 func (w *worker) watchMaster() error {
+	masterPid := os.Getenv(EnvParentPid)
 	for {
 		// if parent id change to 1, it means parent is dead
-		if os.Getppid() == 1 {
+		if !processExist(masterPid) {
 			log.Printf("master dead, stop worker\n")
 			w.stop()
 			break
@@ -124,6 +125,15 @@ func (w *worker) watchMaster() error {
 	}
 	w.stopCh <- struct{}{}
 	return nil
+}
+
+func processExist(pid string) bool {
+	Pid, _ := strconv.ParseInt(pid, 10, 64)
+	if err := syscall.Kill(int(Pid), 0); err != nil {
+		log.Printf("kill err: %v", err)
+		return false
+	}
+	return true
 }
 
 func (w *worker) waitSignal() {

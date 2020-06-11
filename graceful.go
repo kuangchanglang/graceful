@@ -14,6 +14,7 @@ const (
 	EnvWorker       = "GRACEFUL_WORKER"
 	EnvNumFD        = "GRACEFUL_NUMFD"
 	EnvOldWorkerPid = "GRACEFUL_OLD_WORKER_PID"
+	EnvParentPid    = "GRACEFUL_PARENT_PID"
 	ValWorker       = "1"
 )
 
